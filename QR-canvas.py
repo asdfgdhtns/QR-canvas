@@ -20,7 +20,7 @@ nECwords = 26
 codeWords = [0 for x in range(nDatawords + nECwords)]
 init = 3 # when reloading code: 3-random background, 2-black background, 1-white background, 0-don't change background
 
-def drawBigAllignment(x,y):
+def drawBigAllignment(x,y): # prints a big allignment square to dot array at x,y
     for a in range(7):
         dotArray[x+a][y]   = True
         dotArray[x+a][y+6] = True
@@ -29,7 +29,7 @@ def drawBigAllignment(x,y):
     for a in range(2,5):
         for b in range(2,5):
             dotArray[x+a][y+b] = True
-def drawSmallAllignment(x,y):
+def drawSmallAllignment(x,y): # prints a small allignment square to dot array at x,y
     dotArray[x][y]=True
     dotArray[x+1][y]=True
     dotArray[x+2][y]=True
@@ -47,12 +47,12 @@ def drawSmallAllignment(x,y):
     dotArray[x+4][y+2]=True
     dotArray[x+4][y+3]=True
     dotArray[x+2][y+2]=True
-def drawTiming():
+def drawTiming():    # prints timing pattern to dot array
     for a in range(8,29,2):
         dotArray[a][6] = True
         dotArray[6][a] = True
     dotArray[8][29] = True
-def isDataSpot(x,y):
+def isDataSpot(x,y): # returns true if pixel x,y in dot array holds message data
     if x==6 or y==6: # pixel is on the timing pattern or calibration square
         return False
     if x<9 and y<9:   # pixel is on calibration square or format
@@ -73,7 +73,7 @@ def isDataSpot(x,y):
         return False
     
     return True
-def calcData():
+def calcData():      # fills codeWords[] with data from message string
     cPos = 0
     def addData(value, bits):
         nonlocal cPos
@@ -87,7 +87,7 @@ def calcData():
     for a in range(len(message)):
         addData(ord(message[a]),8)
     addData(0,4)
-def calcEC():
+def calcEC():        # calculates and adds Error Correction bytes to codeWords[]
     CGP = [0 for x in range(26)]
     R = [0 for a in range(109)] # 109 is number of data code words + 1
     def prod(n1,n2):
@@ -142,7 +142,7 @@ def calcEC():
                     R[b]=0
     for a in range(nECwords):
         codeWords[nDatawords + a] = R[a]
-def calcFormat():
+def calcFormat():    # calculates format bits and adds them to the formatINT
     global formatINT
     formatINT = EClevel << 13
     formatINT |= (mask  << 10)
@@ -153,7 +153,7 @@ def calcFormat():
             r ^= (1335 << a)
     formatINT|= r
     formatINT ^= 21522 # 21522 defined by densowave
-def drawData():
+def drawData():      # prints codeWords[] data to the dot array
     x = 36
     y = 36
     p = 0
@@ -210,7 +210,7 @@ def drawData():
                 p = 0
             else:
                 y += 1
-def readData():
+def readData():      # reads the dot array and converts to bytes, stores to codeWords[]
     x = 36
     y = 36
     p = 0
@@ -253,7 +253,7 @@ def readData():
                 p = 0
             else:
                 y += 1
-def drawFormat():
+def drawFormat():    # prints the formatINT bits to the dot array
     fp=[[[8,8,8,8,8,8,8,8,7,5,4,3,2,1,0],[0,1,2,3,4,5,7,8,8,8,8,8,8,8,8]],[[36,35,34,33,32,31,30,29,8,8,8,8,8,8,8],[8,8,8,8,8,8,8,8,30,31,32,33,34,35,36]]]
     for a in range(14,-1,-1):
         if formatINT & (1<<a):
@@ -262,7 +262,7 @@ def drawFormat():
         else:
             dotArray[fp[0][0][a]][fp[0][1][a]] = False;
             dotArray[fp[1][0][a]][fp[1][1][a]] = False;
-def maskData():
+def maskData():      # applies the mask to the dot array
     for x in range(37):
         for y in range(37):
             if isDataSpot(x,y):
@@ -290,14 +290,14 @@ def maskData():
                 elif mask == 7:
                     if ((((x*y)%3)+((x*y)&1))&1) == 0:
                         dotArray[x][y]^=1
-def printCode():
+def printCode():     # prints the dotArray to the pygame window
     for x in range(37):
         for y in range(37):
             if (dotArray[x][y]):
                 pygame.draw.rect(screen, (0,0,0), (BORDER+x*codeScale, BORDER+y*codeScale, codeScale, codeScale))
             else:
                 pygame.draw.rect(screen, (255,255,255), (BORDER+x*codeScale, BORDER+y*codeScale, codeScale, codeScale))
-def reload():
+def reload():        # recalculates the code and draws it to the dot array (background affected by init variable)
     global init
     if init:
         if init == 1:
@@ -322,6 +322,7 @@ def reload():
     maskData()
     printCode()
     
+# initialize window and inital code
 
 screen = pygame.display.set_mode((SIZE, SIZE))
 screen.fill((255,255,255))
@@ -335,19 +336,23 @@ pygame.display.update()
 
 print(f"\nMessage: {message}\nMask: {mask}\n\nKey commands:\n n: New message\n m: change Mask\n c: Clear background\n f: Fill background\n r: Random background")
 
+# cursor variables
+
 oldx = 0
 oldy = 0
 newx = 0
 newy = 0
-px = False
-mode = 0 # 0-not pressed, 1-bad pix, 2-good pix
+
+px = False # stores what color dot is being drawn to the screen
+
+mode = 0 #cursor: 0-not pressed, 1-bad pix, 2-good pix
 
 while True:
     
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
             sys.exit()
-        if event.type == pygame.KEYDOWN:
+        elif event.type == pygame.KEYDOWN:
             if event.key == pygame.K_n:
                 message = input("Message: ")
                 reload()
@@ -362,25 +367,25 @@ while True:
                         reload()
                         pygame.display.update()
             elif event.key == pygame.K_c:
-                init = 1
+                init = 1 # clear background
                 reload()
                 pygame.display.update()
             elif event.key == pygame.K_f:
-                init = 2
+                init = 2 # black background
                 reload()
                 pygame.display.update()
             elif event.key == pygame.K_r:
-                init = 3
+                init = 3 # random background
                 reload()
                 pygame.display.update()
         elif event.type == pygame.MOUSEBUTTONDOWN:
-            newx = math.floor((event.pos[0]-BORDER)/codeScale)
-            newy = math.floor((event.pos[1]-BORDER)/codeScale)
+            newx = (event.pos[0]-BORDER)//codeScale # math converts mouse x and y to dot array x and y
+            newy = (event.pos[1]-BORDER)//codeScale
             if isDataSpot(newx, newy):
                 mode = 2 # user clicked on a good pixel
                 px = not dotArray[newx][newy]
                 dotArray[newx][newy] = px
-                printCode();
+                printCode()
                 maskData()
                 readData()
                 calcData()
@@ -394,18 +399,18 @@ while True:
         elif event.type == pygame.MOUSEBUTTONUP:
             mode = 0
         elif event.type == pygame.MOUSEMOTION:
-            if mode == 2:
+            if mode == 2: # if the user is clicking on a changable pixel
                 oldx = newx
                 oldy = newy
-                newx = math.floor((event.pos[0]-BORDER)/codeScale)
-                newy = math.floor((event.pos[1]-BORDER)/codeScale)
+                newx = (event.pos[0]-BORDER)//codeScale
+                newy = (event.pos[1]-BORDER)//codeScale
                 
-                if oldx != newx or oldy != newy:
+                if oldx != newx or oldy != newy: # if the mouse was moved to another pixel
                     oldx = newx
                     oldy = newy
                     if isDataSpot(oldx, oldy):
                         dotArray[oldx][oldy] = px
-                        printCode();
+                        printCode()
                         maskData()
                         readData()
                         calcData()
