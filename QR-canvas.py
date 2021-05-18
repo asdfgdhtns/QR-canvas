@@ -288,7 +288,7 @@ def maskData():      # applies the mask to the dot array
                     if ((((x*y)&1)+((x*y)%3))&1) == 0:
                         dotArray[x][y]^=1
                 elif mask == 7:
-                    if ((((x*y)%3)+((x*y)&1))&1) == 0:
+                    if ((((x+y)%2)+((x*y)%3))%2) == 0 :
                         dotArray[x][y]^=1
 def printCode():     # prints the dotArray to the pygame window
     for x in range(37):
