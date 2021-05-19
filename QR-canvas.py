@@ -384,15 +384,14 @@ while True:
             if isDataSpot(newx, newy):
                 mode = 2 # user clicked on a good pixel
                 px = not dotArray[newx][newy]
-                dotArray[newx][newy] = px
-                printCode()
-                maskData()
-                readData()
-                calcData()
-                calcEC()
-                drawData()
-                maskData()
-                printCode()
+                dotArray[newx][newy] = px # change the pixel the user clicked
+                maskData()  # mask the code
+                readData()  # read the masked data
+                calcData()  # calculate code words of the masked data
+                calcEC()    # calculate the error correction bytes for masked data
+                drawData()  # draw the code words to the dot array
+                maskData()  # mask the masked data (which unmasks it back to what the user drew)
+                printCode() # print it to the screen
                 pygame.display.update()
             else:
                 mode = 1
@@ -410,7 +409,6 @@ while True:
                     oldy = newy
                     if isDataSpot(oldx, oldy):
                         dotArray[oldx][oldy] = px
-                        printCode()
                         maskData()
                         readData()
                         calcData()
