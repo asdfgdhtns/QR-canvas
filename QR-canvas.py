@@ -4,20 +4,22 @@ import random
 import sys
 
 pygame.init()
+#clock = pygame.time.Clock()
 
+version = 6
 codeScale = 20 # size of dots in pixels
 BORDER = codeScale * 2
 SIZE = 2*BORDER + codeScale*37
 
-
 EClevel = 1 # low error correction
 mask = 0
 message = "Hello, World!"
-dotArray = [[False for x in range(37)] for y in range(37)]
+dotArray = [[False for x in range(17 + version * 4)] for y in range(17 + version * 4)]
 formatINT = 0
-nDatawords = 108
-nECwords = 26
-codeWords = [0 for x in range(nDatawords + nECwords)]
+nDatawords = [0, 19, 34, 55, 80, 108, 68] # number of data words per block in each version
+nECwords = [0, 7, 10, 15, 20, 26, 18] # number of error correction words per block in each version
+nBlocks = [0, 1, 1, 1 ,1, 1, 2] # number of blocks in each version
+codeWords = [[0 for x in range(max(nDatawords) + max(nECwords))] for y in range(max(nBlocks))]
 init = 3 # when reloading code: 3-random background, 2-black background, 1-white background, 0-don't change background
 
 def drawBigAllignment(x,y): # prints a big allignment square to dot array at x,y
@@ -48,48 +50,56 @@ def drawSmallAllignment(x,y): # prints a small allignment square to dot array at
     dotArray[x+4][y+3]=True
     dotArray[x+2][y+2]=True
 def drawTiming():    # prints timing pattern to dot array
-    for a in range(8,29,2):
+    for a in range(8, 8 + version * 4,2):
         dotArray[a][6] = True
         dotArray[6][a] = True
-    dotArray[8][29] = True
+    dotArray[8][8 + version * 4] = True
 def isDataSpot(x,y): # returns true if pixel x,y in dot array holds message data
-    if x==6 or y==6: # pixel is on the timing pattern or calibration square
+    if x == 6 or y == 6: # pixel is on the timing pattern or calibration square
         return False
-    if x<9 and y<9:   # pixel is on calibration square or format
+    if x < 9 and y < 9:   # pixel is on calibration square or format
         return False
-    if x<9 and y>28:  # pixel is on calibration square or format
+    if x < 9 and y > (17+4*version) - 9:  # pixel is on calibration square or format
         return False
-    if x>28 and y<9:  # pixel is on calibration square of format
+    if x > (17+4*version) - 9 and y < 9:  # pixel is on calibration square of format
         return False
-    if x>27 and y>27 and x<33 and y<33: #pix is on small calibration square
+    if x > (17+4*version) - 10 and y>(17+4*version) - 10 and x<(17+4*version) - 4 and y<(17+4*version) - 4: #pix is on small calibration square
         return False
-    if x<0:
+    if x < 0:
         return False
-    if x>36:
+    if x >= 17 + version * 4:
         return False
-    if y<0:
+    if y < 0:
         return False
-    if y>36:
+    if y >= 17 + version * 4:
         return False
     
     return True
 def calcData():      # fills codeWords[] with data from message string
+    b = 0
     cPos = 0
     def addData(value, bits):
         nonlocal cPos
+        nonlocal b
         for a in range(bits):
-            codeWords[cPos>>3] |= 128>>(cPos&7)
+            codeWords[b][cPos>>3] |= 128>>(cPos&7)
             if not (value&(1<<bits-a-1)):
-                codeWords[cPos>>3] ^= 128>>(cPos&7)
+                codeWords[b][cPos>>3] ^= 128>>(cPos&7)
             cPos += 1
+            if cPos>>3 == nDatawords[version]:
+                cPos = 0
+                b += 1
+    
     addData(4,4) # binary mode
     addData(len(message),8)
+    
     for a in range(len(message)):
         addData(ord(message[a]),8)
-    addData(0,4)
+    while cPos&7:
+        addData(0,1)
 def calcEC():        # calculates and adds Error Correction bytes to codeWords[]
-    CGP = [0 for x in range(26)]
-    R = [0 for a in range(109)] # 109 is number of data code words + 1
+    CGP = [0 for x in range(nECwords[version])]
+    R = [0 for a in range(nDatawords[version] + 1)]
     def prod(n1,n2):
         p = 0
         
@@ -113,35 +123,35 @@ def calcEC():        # calculates and adds Error Correction bytes to codeWords[]
                         tp[a+b] ^= prod(p1[a],p2[b])
         
         return tp
-    def calcCGP():
-        nonlocal CGP
-        tp = [0 for a in range(27)] # 27 is number of EC code words + 1
-        CGP[0] = 1
-        CGP[1] = 1
-        tp[0] = 1
-        tp[1] = 2
+    
+    # calculate CGP
+    tp = [0 for a in range(nECwords[version]+1)]
+    CGP[0] = 1
+    CGP[1] = 1
+    tp[0] = 1
+    tp[1] = 2
         
-        for a in range(1, nECwords):
-            CGP = polyProd(CGP,a,tp,1)
-            tp[1] = prod(tp[1],2)
-    calcCGP()
-    for a in range(nDatawords):
-        R[a] = codeWords[a]
+    for a in range(1, nECwords[version]):
+        CGP = polyProd(CGP,a,tp,1)
+        tp[1] = prod(tp[1],2)
     
-    R[nDatawords] = 0
-    
-    for a in range(nDatawords):
-        c = R[0]
-        for b in range(nECwords+1):
-            if b < nECwords:
-                R[b] = R[b+1]^prod(CGP[b+1],c)
-            else:
-                if a + nECwords < nDatawords:
-                    R[b] = codeWords[a+nECwords+1]
+    for b in range(nBlocks[version]):
+        for a in range(nDatawords[version]):
+            R[a] = codeWords[b][a]
+        
+        R[nDatawords[version]] = 0
+        
+        for a in range(nDatawords[version]):
+            c = R[0]
+            for d in range(nECwords[version]+1):
+                if d < nECwords[version]:
+                    R[d] = R[d+1]^prod(CGP[d+1],c)
+                elif a + nECwords[version] < nDatawords[version]:
+                    R[d] = codeWords[b][a+nECwords[version]+1]
                 else:
-                    R[b]=0
-    for a in range(nECwords):
-        codeWords[nDatawords + a] = R[a]
+                    R[d]=0
+        for a in range(nECwords[version]):
+            codeWords[b][nDatawords[version] + a] = R[a]
 def calcFormat():    # calculates format bits and adds them to the formatINT
     global formatINT
     formatINT = EClevel << 13
@@ -154,12 +164,12 @@ def calcFormat():    # calculates format bits and adds them to the formatINT
     formatINT|= r
     formatINT ^= 21522 # 21522 defined by densowave
 def drawData():      # prints codeWords[] data to the dot array
-    x = 36
-    y = 36
-    p = 0
+    x = y = 16 + version * 4
+    p = 0 # 0-right side going up, 1- left side going up, 2-right side going down, 3-left side going down
+    b = 0 # what block we are on
     src = 0 # 0 = data, 1 = EC
-    pByte = 0
-    pBit = 0
+    pByte = 0 # position in byte list
+    pBit = 0 # position of bit in byte
     
     while p<4:
         #print(f'{pByte}, {pBit}, {x:2}, {y:2}, {isDataSpot(x,y)}')
@@ -167,24 +177,76 @@ def drawData():      # prints codeWords[] data to the dot array
         if isDataSpot(x,y):
             if src == 0:
                 dotArray[x][y] = False
-                if codeWords[pByte] & (128>>pBit):
+                if codeWords[b][pByte] & (128>>pBit):
                     dotArray[x][y] = True
                 pBit += 1
                 if pBit == 8:
                     pBit = 0
-                    pByte += 1
-                    if pByte >= nDatawords:
-                        pByte = 0
-                        src = 1
+                    b += 1
+                    if b == nBlocks[version]:
+                        b = 0
+                        pByte += 1
+                        if pByte >= nDatawords[version]:
+                            pByte = 0
+                            src = 1
             else:
                 dotArray[x][y] = False
-                if codeWords[nDatawords + pByte] & (128 >> pBit):
+                if codeWords[b][nDatawords[version] + pByte] & (128 >> pBit):
                     dotArray[x][y] = True
                 pBit += 1
                 if pBit == 8:
                     pBit = 0
+                    b += 1
+                    if b == nBlocks[version]:
+                        b = 0
+                        pByte += 1
+                        if pByte >= nECwords[version]:
+                            p=4
+        if p == 0:
+            x -= 1
+            p = 1
+        elif p == 1:
+            x += 1
+            p = 0
+            if y == 0:
+                x -= 2
+                if x == 6:
+                    x -= 1
+                p = 2
+            else:
+                y -= 1
+        elif p == 2:
+            x -= 1
+            p = 3
+        elif p == 3:
+            x += 1
+            p = 2
+            if y == 16 + version * 4:
+                x -= 2
+                p = 0
+            else:
+                y += 1
+def readData():      # reads the dot array and converts to bytes, stores to codeWords[]
+    x = y = 16 + version * 4
+    p = 0 # 0-right side going up, 1- left side going up, 2-right side going down, 3-left side going down
+    b = 0 # what block we are on
+    src = 0 # 0 = data, 1 = EC
+    pByte = 0 # position in byte list
+    pBit = 0 # position of bit in byte
+    
+    while p<4:
+        if isDataSpot(x,y):
+            codeWords[b][pByte] |= (128>>pBit)
+            if not dotArray[x][y]:
+                codeWords[b][pByte] ^= (128>>pBit)
+            pBit += 1
+            if pBit == 8:
+                pBit = 0
+                b += 1
+                if b == nBlocks[version]:
+                    b = 0
                     pByte += 1
-                    if pByte >= nECwords:
+                    if pByte >= nDatawords[version]:
                         p=4
         if p == 0:
             x -= 1
@@ -205,56 +267,14 @@ def drawData():      # prints codeWords[] data to the dot array
         elif p == 3:
             x += 1
             p = 2
-            if y == 36:
-                x -= 2
-                p = 0
-            else:
-                y += 1
-def readData():      # reads the dot array and converts to bytes, stores to codeWords[]
-    x = 36
-    y = 36
-    p = 0
-    pByte = 0
-    pBit = 0
-    
-    while p<4:
-        if isDataSpot(x,y):
-            codeWords[pByte] |= (128>>pBit)
-            if not dotArray[x][y]:
-                codeWords[pByte] ^= (128>>pBit)
-            pBit += 1
-            if pBit == 8:
-                pBit = 0
-                pByte += 1
-                if pByte >= nDatawords:
-                    pByte = 0
-                    p = 4
-        if p == 0:
-            x -= 1
-            p = 1
-        elif p == 1:
-            x += 1
-            p = 0
-            if y == 0:
-                x -= 2
-                if x == 6:
-                    x -= 1
-                p = 2
-            else:
-                y -= 1
-        elif p == 2:
-            x -= 1
-            p = 3
-        elif p == 3:
-            x += 1
-            p = 2
-            if y == 36:
+            if y == 16 + version * 4:
                 x -= 2
                 p = 0
             else:
                 y += 1
 def drawFormat():    # prints the formatINT bits to the dot array
-    fp=[[[8,8,8,8,8,8,8,8,7,5,4,3,2,1,0],[0,1,2,3,4,5,7,8,8,8,8,8,8,8,8]],[[36,35,34,33,32,31,30,29,8,8,8,8,8,8,8],[8,8,8,8,8,8,8,8,30,31,32,33,34,35,36]]]
+    o = 16 + version * 4
+    fp=[[[8,8,8,8,8,8,8,8,7,5,4,3,2,1,0],[0,1,2,3,4,5,7,8,8,8,8,8,8,8,8]],[[o,o-1,o-2,o-3,o-4,o-5,o-6,o-7,8,8,8,8,8,8,8],[8,8,8,8,8,8,8,8,o-6,o-5,o-4,o-3,o-2,o-1,o]]]
     for a in range(14,-1,-1):
         if formatINT & (1<<a):
             dotArray[fp[0][0][a]][fp[0][1][a]] = True
@@ -263,8 +283,8 @@ def drawFormat():    # prints the formatINT bits to the dot array
             dotArray[fp[0][0][a]][fp[0][1][a]] = False;
             dotArray[fp[1][0][a]][fp[1][1][a]] = False;
 def maskData():      # applies the mask to the dot array
-    for x in range(37):
-        for y in range(37):
+    for x in range(17 + version * 4):
+        for y in range(17 + version * 4):
             if isDataSpot(x,y):
                 if mask == 0:
                     if ((x+y)&1) == 0:
@@ -291,8 +311,8 @@ def maskData():      # applies the mask to the dot array
                     if ((((x+y)%2)+((x*y)%3))%2) == 0 :
                         dotArray[x][y]^=1
 def printCode():     # prints the dotArray to the pygame window
-    for x in range(37):
-        for y in range(37):
+    for x in range(17 + version * 4):
+        for y in range(17 + version * 4):
             if (dotArray[x][y]):
                 pygame.draw.rect(screen, (0,0,0), (BORDER+x*codeScale, BORDER+y*codeScale, codeScale, codeScale))
             else:
@@ -301,14 +321,17 @@ def reload():        # recalculates the code and draws it to the dot array (back
     global init
     if init:
         if init == 1:
-            for a in range(nDatawords):
-                codeWords[a] = 0
+            for a in range(nDatawords[version]):
+                for b in range(nBlocks[version]):
+                    codeWords[b][a] = 0
         elif init == 2:
-            for a in range(nDatawords):
-                codeWords[a] = 255
+            for a in range(nDatawords[version]):
+                for b in range(nBlocks[version]):
+                    codeWords[b][a] = 255
         elif init == 3:
-            for a in range(nDatawords):
-                codeWords[a] = random.randint(0,255)
+            for a in range(nDatawords[version]):
+                for b in range(nBlocks[version]):
+                    codeWords[b][a] = random.randint(0,255)
         drawData()
         maskData()
         readData()
@@ -324,12 +347,14 @@ def reload():        # recalculates the code and draws it to the dot array (back
     
 # initialize window and inital code
 
+BORDER = codeScale * 2
+SIZE = 2 * BORDER + codeScale * (17 + 4*version)
 screen = pygame.display.set_mode((SIZE, SIZE))
 screen.fill((255,255,255))
 drawBigAllignment(0,0)
-drawBigAllignment(0,30)
-drawBigAllignment(30,0)
-drawSmallAllignment(28,28)
+drawBigAllignment(0,10 + version * 4)
+drawBigAllignment(10 + version * 4,0)
+drawSmallAllignment(8 + version * 4, 8 + version * 4)
 drawTiming()
 reload()
 pygame.display.update()
